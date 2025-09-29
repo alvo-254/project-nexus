@@ -7,3 +7,7 @@ Django==4.2.7
    drf-spectacular==0.26.5
    python-decouple==3.8
    Pillow==10.4.0
+   # Add to requirements.txt
+   gunicorn==21.2.0
+   django-cors-headers==4.3.1
+   whitenoise==6.5.0
