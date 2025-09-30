@@ -1,77 +1,62 @@
-from rest_framework import generics, filters, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import viewsets, filters, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count
-from .models import Category, Job, JobApplication
-from .serializers import CategorySerializer, JobSerializer, JobApplicationSerializer
-from .permissions import IsAdminOrReadOnly, IsOwnerOrAdmin
+from .models import Job, Category, Location, Application
+from .serializers import (
+    JobSerializer, 
+    CategorySerializer, 
+    LocationSerializer, 
+    ApplicationSerializer
+)
 
-class CategoryListCreateView(generics.ListCreateAPIView):
-    queryset = Category.objects.annotate(jobs_count=Count('jobs'))
-    serializer_class = CategorySerializer
-    permission_classes = [IsAdminOrReadOnly]
 
-class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for categories
+    """
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAdminOrReadOnly]
 
-class JobListCreateView(generics.ListCreateAPIView):
-    queryset = Job.objects.select_related('category', 'posted_by').annotate(
-        applications_count=Count('applications')
-    ).filter(is_active=True)
+
+class LocationViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for locations
+    """
+    queryset = Location.objects.all()
+    serializer_class = LocationSerializer
+
+
+class JobViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for jobs with filtering
+    """
+    queryset = Job.objects.filter(is_active=True)
     serializer_class = JobSerializer
-    permission_classes = [IsAdminOrReadOnly]  # Public can view, only admins can create
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['title', 'company', 'description', 'location']
-    ordering_fields = ['created_at', 'title', 'salary_min']
+    filterset_fields = ['category', 'location', 'experience_level', 'job_type']
+    search_fields = ['title', 'company', 'description']
+    ordering_fields = ['created_at', 'salary']
     ordering = ['-created_at']
 
-class JobDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Job.objects.select_related('category', 'posted_by').annotate(
-        applications_count=Count('applications')
-    )
-    serializer_class = JobSerializer
-    
-    def get_permissions(self):
-        # Allow anyone to view (GET), but only owner/admin to modify
-        if self.request.method == 'GET':
-            return [AllowAny()]
-        return [IsOwnerOrAdmin()]
 
-class JobApplicationListCreateView(generics.ListCreateAPIView):
-    serializer_class = JobApplicationSerializer
-    permission_classes = [IsAuthenticated]
+class ApplicationViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for job applications
+    """
+    queryset = Application.objects.all()
+    serializer_class = ApplicationSerializer
     
-    def get_queryset(self):
-        if self.request.user.role == 'admin':
-            return JobApplication.objects.select_related('job', 'applicant').all()
-        return JobApplication.objects.select_related('job', 'applicant').filter(
-            applicant=self.request.user
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                "message": "Application submitted successfully!",
+                "data": serializer.data
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers
         )
-
-class JobApplicationDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = JobApplicationSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        if self.request.user.role == 'admin':
-            return JobApplication.objects.select_related('job', 'applicant').all()
-        return JobApplication.objects.select_related('job', 'applicant').filter(
-            applicant=self.request.user
-        )
-
-@api_view(['GET'])
-@permission_classes([AllowAny])  # Make stats public
-def job_stats(request):
-    total_jobs = Job.objects.filter(is_active=True).count()
-    total_categories = Category.objects.count()
-    total_applications = JobApplication.objects.count()
-    
-    return Response({
-        'total_jobs': total_jobs,
-        'total_categories': total_categories,
-        'total_applications': total_applications,
-    })

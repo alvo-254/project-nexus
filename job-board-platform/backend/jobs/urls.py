@@ -1,12 +1,13 @@
-from django.urls import path
-from . import views
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import JobViewSet, CategoryViewSet, LocationViewSet, ApplicationViewSet
+
+router = DefaultRouter()
+router.register(r'jobs', JobViewSet, basename='job')
+router.register(r'categories', CategoryViewSet, basename='category')
+router.register(r'locations', LocationViewSet, basename='location')
+router.register(r'applications', ApplicationViewSet, basename='application')
 
 urlpatterns = [
-    path('categories/', views.CategoryListCreateView.as_view(), name='category-list'),
-    path('categories/<int:pk>/', views.CategoryDetailView.as_view(), name='category-detail'),
-    path('jobs/', views.JobListCreateView.as_view(), name='job-list'),
-    path('jobs/<int:pk>/', views.JobDetailView.as_view(), name='job-detail'),
-    path('applications/', views.JobApplicationListCreateView.as_view(), name='application-list'),
-    path('applications/<int:pk>/', views.JobApplicationDetailView.as_view(), name='application-detail'),
-    path('stats/', views.job_stats, name='job-stats'),
+    path('', include(router.urls)),
 ]
